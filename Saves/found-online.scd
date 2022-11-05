@@ -2,6 +2,9 @@
 // COPIED FROM: http://sccode.org/1-5gs
 {var a=LFNoise0,b=SinOscFB,c=Pulse;b.ar(a.ar([2,3])*(c.ar([5,7],b.kr([7,5]))*(a.ar([3,2]))*[800,1200]),(c.kr([100,80])*[2,3]))}.play
 
+// COPIED FROM: http://sccode.org/1-4SV
+{((SmoothDecimator.ar(Saw.ar([4e3,4054],0,0.2),LFTri.kr(0.01,1e3,1e3).abs)**Saw.ar(400))**Saw.ar(2e3)).clip(-0.5,0.5)}.play //
+
 // COPIED FROM: http://sccode.org/1-5fq#c1005
 (
 {
@@ -627,4 +630,226 @@ shm = {
 };
 
 shm.(spectrum, freq_scale, amp_scale); //run
+)
+
+// COPIED FROM: http://sccode.org/1-8i
+s.boot;
+
+ /*SynthDef section*/
+(
+SynthDef(\raintree02, {arg freq,amp,pan;
+	var out, env;
+	env = Env.perc(0.01,0.5);
+	out = SinOsc.ar(freq.midicps,0,1.0) * EnvGen.kr(env, doneAction: 2);
+	out = Pan2.ar(out, pan);
+	out = FreeVerb.ar(out, 0.3,0.3,0.1,amp);
+	Out.ar(0, out);
+}).send(s);
+)
+
+
+/*Task section*/
+(
+
+var midiArray = [ [31,38,41,44,48,52] ,[33,38,45,48,51,55],[35,42,44,45,48,52]  ];
+
+var midi;
+var  taskArray = [ 0,0 ];
+
+   Task({
+
+		inf.do({arg num1;
+
+			if( (num1+1).mod(4) == 0,{
+			  midiArray = midiArray.scramble;
+			  midiArray = midiArray + 1.rand2;
+			  });
+
+			  midi = midiArray.wrapAt(num1);
+			  num1.postln;
+
+		       midi.postln;
+		  taskArray.wrapAt(num1).stop;
+            taskArray.wrapPut(num1,
+              Task({
+		        inf.do({arg num2;
+			      var oct;
+			      oct = [0,12,24,36].wchoose( [0.2,0.25,0.3,0.25]);
+
+			       Synth(\raintree02,[
+		                            \freq, midi.wrapAt(num2)+oct,
+		                            \amp,  rrand(0.05, 0.4),
+		                            \pan, [-0.8,0.8].wrapAt(num1);
+		                              ]);
+		       if( (num2+1).mod(40) == 0,{
+			           midi = midi.scramble;
+		          });
+
+                                 0.25.wait;
+		            })
+		    }).start;
+		    );
+
+      20.wait;
+
+
+	})
+}).start;
+
+ )
+
+// COPIED FROM: http://sccode.org/1-m
+(
+SynthDef(\dollar, { |out, freq = 440, amp = 0.1, pan = 0, sustain = 1.0|
+	var env = EnvGen.kr(Env([amp, amp, 0], [sustain, 0.01]), doneAction: 2);
+	var decay = freq ** -0.5 * 100;
+	var string = CombL.ar(Decay2.ar(Impulse.ar(0), 0.0001, 0.001), 1/freq, 1/freq, decay);
+	var damped = string; //LPF.ar(string, Line.kr(11000, 3000, decay));
+	OffsetOut.ar(out, Pan2.ar(damped * env, pan));
+}).add;
+)
+
+(
+SynthDef(\euro, { |out, freq = 440, amp = 0.1, pan = 0, sustain = 1.0|
+	var env = EnvGen.kr(Env.perc(0.001, sustain), doneAction: 2);
+	var decay = freq ** -0.5 * 100;
+	var thing;
+	freq = freq * (1..7).nthPrime;
+	thing = SinOsc.ar(freq , 0, amp * AmpComp.kr(freq)).mean;
+	OffsetOut.ar(out, Pan2.ar(thing * env, pan));
+}).add;
+)
+
+
+(
+Pdef(\stock, { |note = 0, sustain = 1|
+	Pbind(
+		\instrument, [\dollar, \euro].choose,
+		\note, note.value + Pseq((12..0).curdle(0.1).scramble.flat * 3),
+		\dur, sustain.value / 12
+	)
+})
+);
+
+(
+Pdef(\ett,
+	Pbind(
+		\type, \phrase,
+		\instrument, \stock,
+		\dur, 4,
+		\legato, Prand((1..5), inf),
+		\note, Prand((0..12), inf) + Prand([[0, 2], [0, 6], [0, 7], 0, 0], inf)
+	)
+).play
+)
+
+
+// COPIED FROM: http://sccode.org/1-51w
+b = Buffer.read(s, Platform.resourceDir +/+ "sounds/a11wlk01.wav");
+
+(
+{
+    var snd, envTime, knee, out;
+    snd = PlayBuf.ar(1, b, BufRateScale.kr(b), loop: 1);
+    envTime = MouseX.kr(1.0e-3, 0.1e-3);
+    knee = MouseY.kr(0, -90).dbamp;
+    out = DelayC.ar(snd, 0.01, envTime * 0.5) * EnvFollow.ar(snd, 1 - (envTime * SampleRate.ir).reciprocal).max(knee).reciprocal;
+    out * 0.1!2
+}.play;
+)
+
+
+///////////////////////////////////////////////////////////////
+
+// COPIED FROM: http://sccode.org/1-56B
+
+Quarks.gui //this opens the GUI for quarks, you need to have the JITLibExtensions selected and then recompile the library
+
+(
+Ndef(\ambienceMaker).addSpec(\rWet, [-1, 1, \lin]);
+Ndef(\ambienceMaker).addSpec(\rateRedux, [0, 1]);
+Ndef(\ambienceMaker).addSpec(\bits, [1, 32, \lin]);
+
+Ndef(\ambienceMaker).addSpec(\bpWet, [0, 1, \lin]);
+Ndef(\ambienceMaker).addSpec(\bpFreq, \freq);
+Ndef(\ambienceMaker).addSpec(\bpRq, [0, 2, \lin]);
+
+Ndef(\ambienceMaker).addSpec(\hpnoise, [-48, 0, \db]);
+Ndef(\ambienceMaker).addSpec(\white, [-48, 0, \db]);
+Ndef(\ambienceMaker).addSpec(\pink, [-48, 0, \db]);
+Ndef(\ambienceMaker).addSpec(\brown, [-48, 0, \db]);
+Ndef(\ambienceMaker).addSpec(\gray, [-48, 0, \db]);
+Ndef(\ambienceMaker).addSpec(\dust, [-48, 0, \db]);
+Ndef(\ambienceMaker).addSpec(\dustDensity, [1, s.sampleRate/2, \exp]);
+
+Ndef(\ambienceMaker).addSpec(\drops, [-48, 0, \db]);
+Ndef(\ambienceMaker).addSpec(\dropDensity, [1, s.sampleRate/2, \exp]);
+Ndef(\ambienceMaker).addSpec(\dropDecay, [0.001, 1, \exp]);
+Ndef(\ambienceMaker).addSpec(\dropFFreq, \freq);
+Ndef(\ambienceMaker).addSpec(\dropFRq, [0, 2, \lin]);
+
+
+
+Ndef(\ambienceMaker, {
+	var noise, src;
+	var zeroAmp = 0.0039811;
+	var hpnoise = \hpnoise.kr(1).dbamp - zeroAmp;
+	var hpNFreq = \hpNFreq.kr(1000, 0.1);
+	var white = \white.kr(1).dbamp - zeroAmp;
+	var pink = \pink.kr(1).dbamp - zeroAmp;
+	var brown = \brown.kr(1).dbamp - zeroAmp;
+	var gray = \gray.kr(1).dbamp - zeroAmp;
+	var dust = \dust.kr(1).dbamp - zeroAmp;
+	var dustDensity = \dustDensity.kr(1);
+
+	var drops = \drops.kr(1).dbamp - zeroAmp;
+	var dropDensity = \dropDensity.kr(1);
+	var dropDecay = \dropDecay.kr(1);
+	var dropFFreq = \dropFFreq.kr(1);
+	var dropFRq = \dropFRq.kr(1);
+
+
+	var bpF;
+	var bpWet = \bpWet.kr(0);
+	var bpFreq = \bpFreq.kr(20000, 0.01);
+	var bpRq = \bpRq.kr(1, 0.01);
+
+
+	var redux;
+	var rWet = \rWet.kr(0);
+	var rateRedux = \rateRedux.kr(1, 0.01);
+	var bits = \bits.kr(32);
+
+
+	hpnoise = {HPF.ar(PinkNoise.ar(hpnoise), hpNFreq)}!2;
+	white   = {WhiteNoise.ar(white)}!2;
+	pink    = {PinkNoise.ar(pink)}!2;
+	brown   = {BrownNoise.ar(brown)}!2;
+	gray    = {GrayNoise.ar(gray)}!2;
+	dust    = {Dust2.ar(dustDensity, dust)}!2;
+
+
+
+	src = Mix([white, pink, brown, gray, dust, hpnoise]);
+
+	drops = {Decay.ar(Dust.ar(dropDensity, drops), dropDecay) * PinkNoise.ar}!2;
+
+	src = Mix([src, drops]);
+
+	bpF = BPF.ar(src, bpFreq, bpRq);
+	src = SelectX.ar(bpWet, [src, bpF]);
+
+	redux = Latch.ar(src, Impulse.ar(SampleRate.ir * (rateRedux/2)));
+	redux = redux.round(0.5 ** bits);
+	SelectX.ar(1 + rWet, [src - redux, src, redux]);
+
+})
+)
+
+
+Ndef(\ambienceMaker).gui
+
+(
+Ndef('noiseBurst').set('white', -48.0, 'pink', -40.494860819681, 'bpWet', 0.76190476190476, 'bpRq', 1.2910052910053, 'dust', -17.0397263296, 'dropDecay', 0.0066895487869141, 'dustDensity', 4.89136346687, 'bits', 3.952380952381, 'noiseType', 1.1746031746032, 'dropFFreq', 119.89685006379, 'bpFreq', 928.31776672256, 'brown', -36.400703367795, 'dropDensity', 6.7191745397468, 'dropFRq', 0.074074074074074, 'gray', -48.0, 'rateRedux', 0.47619047619048, 'drops', -9.8101205277825, 'rWet', 0.37037037037037);
+
 )

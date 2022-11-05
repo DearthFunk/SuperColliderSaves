@@ -1,6 +1,10 @@
 s.boot;
 s.quit;
 
+//open the GUI for managing Quarks
+//Quarks = package of SC code containing classes, extension methods, documentation and server UGen plugins.
+Quarks.gui
+
 // ctrl + . (numpad) to kill all
 // ctrl + enter to play
 // play a note
